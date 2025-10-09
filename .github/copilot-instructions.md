@@ -4,8 +4,7 @@
 This repository provisions secure-by-default Azure landing zones from specification Excel files. All infrastructure must now be composed with **Azure Verified Modules (AVM)** sourced from the public Bicep registry. The Copilot agent is responsible for translating each request into:
 
 1. A dedicated `main.bicep` authored with AVM references.
-2. A matching `deploy.bicepparam` parameter file.
-3. Validation evidence that the configuration is syntactically sound and ready for the deploy-infra workflow to validate module resolution (see validation steps below).
+2. Validation evidence that the configuration is syntactically sound and ready for the deploy-infra workflow to validate module resolution (see validation steps below).
 
 ## Repository Layout & Naming
 ```
@@ -15,8 +14,7 @@ This repository provisions secure-by-default Azure landing zones from specificat
 ├── apps/
 │   └── {organization}/
 │       └── {project}/
-│           ├── main.bicep      # AVM-based workload template (author per request)
-│           └── deploy.bicepparam
+│           └── main.bicep      # AVM-based workload template (author per request)
 ├── specs/
 │   └── {organization}/
 │       └── {project}/
@@ -55,17 +53,10 @@ Before producing files, query Azure (using MCP tooling) for the subscription def
 
 ### Scope & contract
 - `targetScope = 'subscription'`
-- Parameters (minimum):
-  - `param organization string`
-  - `param project string`
-  - `param location string`
-  - `param tags object`
-  - `param vnetAddressPrefixes array`
-  - `param subnetDefinitions array` (objects with `name`, `usage`, `addressPrefix`)
-- Derived locals:
-  - `var workloadName = '${organization}-${project}'`
-  - `var resourceGroupName = workloadName`
-- Modules provision resources inside the workload resource group by setting `scope: resourceGroup(resourceGroupName)` and adding `dependsOn: [ workloadRg ]` where `workloadRg` is the resource-group module.
+- Define only the parameters needed to describe the deployment (for example `resourceGroupName`, `location`, `tags`, `vnetAddressPrefixes`, `subnetDefinitions`). Do not declare separate `organization` or `project` parameters or variables.
+- Embed request-specific values directly inside `main.bicep` (for example, by setting parameter default values or inline variables). Do not create a companion `deploy.bicepparam` file.
+- Create the workload resource group inside `main.bicep` with `br/public:avm/res/resources/resource-group` and set its `name` from the chosen `resourceGroupName` value.
+- Scope every subsequent AVM module with `scope: resourceGroup(workloadRg.outputs.name)` (or the equivalent pattern) and add `dependsOn: [ workloadRg ]` to sequence creation. Do not hardcode or recompute the resource group name—always reuse the module output.
 - Outputs: at least `resourceGroupName`, `vnetName`, `nsgSubnets` (array of `{ subNetName, nsgName }`) to satisfy `deployBicep.sh` post-processing.
 
 ### Required module invocations
@@ -112,18 +103,26 @@ Add further AVM modules (e.g., AKS, Bastion, VPN) when a spec calls for them. Al
 ```bicep
 targetScope = 'subscription'
 
-param organization string
-param project string
-param location string
-param tags object
-param vnetAddressPrefixes array
-param subnetDefinitions array
-
-var workloadName = '${organization}-${project}'
-var resourceGroupName = workloadName
+param resourceGroupName string = '<resource group name from spec>'
+param location string = '<azure region from spec>'
+param tags object = {
+  applicationNumber: '<request number>'
+  environment: '<environment name>'
+  // include any additional metadata required by the request (e.g., organization/project) without declaring separate parameters
+}
+param vnetAddressPrefixes array = [
+  '<address space from spec>'
+]
+param subnetDefinitions array = [
+  {
+    name: '<subnet name>'
+    usage: '<workload usage label>'
+    addressPrefix: '<subnet cidr>'
+  }
+]
 
 module workloadRg 'br/public:avm/res/resources/resource-group:0.4' = {
-  name: 'rg-${workloadName}'
+  name: 'rg-${resourceGroupName}'
   params: {
     name: resourceGroupName
     location: location
@@ -131,15 +130,17 @@ module workloadRg 'br/public:avm/res/resources/resource-group:0.4' = {
   }
 }
 
+var workloadRgName = workloadRg.outputs.name
+
 module nsgs 'br/public:avm/res/network/network-security-group:0.5' = [
   for subnet in subnetDefinitions: {
-    name: 'nsg-${workloadName}-${subnet.usage}'
-    scope: resourceGroup(resourceGroupName)
+    name: 'nsg-${workloadRgName}-${subnet.usage}'
+    scope: resourceGroup(workloadRgName)
     dependsOn: [
       workloadRg
     ]
     params: {
-      name: '${workloadName}-${subnet.usage}-nsg'
+      name: '${workloadRgName}-${subnet.usage}-nsg'
       location: location
       securityRules: [] // populate from spec
       tags: tags
@@ -148,21 +149,21 @@ module nsgs 'br/public:avm/res/network/network-security-group:0.5' = [
 ]
 
 module vnet 'br/public:avm/res/network/virtual-network:0.7' = {
-  name: 'vnet-${workloadName}'
-  scope: resourceGroup(resourceGroupName)
+  name: 'vnet-${workloadRgName}'
+  scope: resourceGroup(workloadRgName)
   dependsOn: [
     workloadRg
     nsgs
   ]
   params: {
-    name: '${workloadName}-vnet'
+    name: '${workloadRgName}-vnet'
     location: location
     addressPrefixes: vnetAddressPrefixes
     subnets: [
       for subnet in subnetDefinitions: {
         name: subnet.name
         addressPrefix: subnet.addressPrefix
-        networkSecurityGroupId: resourceId('Microsoft.Network/networkSecurityGroups', '${workloadName}-${subnet.usage}-nsg')
+        networkSecurityGroupId: resourceId('Microsoft.Network/networkSecurityGroups', '${workloadRgName}-${subnet.usage}-nsg')
       }
     ]
     tags: tags
@@ -171,43 +172,15 @@ module vnet 'br/public:avm/res/network/virtual-network:0.7' = {
 
 // Instantiate storage, SQL, web apps, private endpoints, DNS links, and monitoring modules with the same scope pattern.
 
-output resourceGroupName string = resourceGroupName
+output resourceGroupName string = workloadRg.outputs.name
 output vnetName string = vnet.outputs.name
 output nsgSubnets array = [
   for subnet in subnetDefinitions: {
     subNetName: subnet.name
-    nsgName: '${workloadName}-${subnet.usage}-nsg'
+    nsgName: '${workloadRgName}-${subnet.usage}-nsg'
   }
 ]
 ```
-
-## Authoring `deploy.bicepparam`
-
-Place alongside `main.bicep` and reference it with a relative using statement:
-
-```bicep
-using './main.bicep'
-
-var requestNumber = '9999'
-param organization = 'MIN800'
-param project = 'RG805'
-param location = 'westeurope'
-param tags = {
-  applicationNumber: requestNumber
-  organization: organization
-  project: project
-}
-param vnetAddressPrefixes = [
-  '10.10.0.0/16'
-]
-param subnetDefinitions = [
-  { name: 'snet-apps', usage: 'AppService', addressPrefix: '10.10.0.0/24' }
-  { name: 'snet-pe', usage: 'PrivateEndpoint', addressPrefix: '10.10.1.0/24' }
-  { name: 'snet-sql', usage: 'Sql', addressPrefix: '10.10.2.0/24' }
-]
-```
-
-Augment this file with additional parameters required by the instantiated modules (e.g., `sqlAdminLogin`, `appServicePlans`, `storageAccounts`). Store sensitive secrets in Key Vault references or environment variables; never inline them.
 
 ## Translating Excel ➜ AVM parameters
 
