@@ -27,7 +27,7 @@ This repository provisions secure-by-default Azure landing zones from specificat
 ### Canonical vocabulary
 - **organization** identifies the top-level requestor folder under `apps/` and `specs/`.
 - **project** identifies the workload folder nested beneath the organization.
-- The Azure resource group must exist up-front and be named `${organization}-${project}` (all uppercase preserved from specs). If it is missing, stop and raise the gap.
+- The Azure resource group is created during deployment and must be named `${organization}-${project}` (all uppercase preserved from specs).
 - Everywhere we collect metadata, tag and label resources with at least:
   - `applicationNumber`: Excel request id (Sheet 2)
   - `organization`, `project`
@@ -42,7 +42,7 @@ This repository provisions secure-by-default Azure landing zones from specificat
 
 ## Resource discovery checklist
 Before producing files, query Azure (using MCP tooling) for the subscription defined in the spec:
-- Verify the `${organization}-${project}` resource group exists in the expected region.
+- Confirm whether a resource group named `${organization}-${project}` already exists and document any drift (location, tags); the deployment will create or update this group automatically.
 - List existing VNet, subnets, private endpoints, and DNS zones. Note any naming or IP conflicts.
 - Flag conflicts in the summary section of your response; do not overwrite existing assets unless the spec explicitly calls for updates.
 
@@ -54,7 +54,7 @@ Before producing files, query Azure (using MCP tooling) for the subscription def
 ## Authoring `apps/{organization}/{project}/main.bicep`
 
 ### Scope & contract
-- `targetScope = 'resourceGroup'`
+- `targetScope = 'subscription'`
 - Parameters (minimum):
   - `param organization string`
   - `param project string`
@@ -64,10 +64,14 @@ Before producing files, query Azure (using MCP tooling) for the subscription def
   - `param subnetDefinitions array` (objects with `name`, `usage`, `addressPrefix`)
 - Derived locals:
   - `var workloadName = '${organization}-${project}'`
-- Outputs: at least `vnetName`, `nsgSubnets` (array of `{ subNetName, nsgName }`) to satisfy `deployBicep.sh` post-processing.
+  - `var resourceGroupName = workloadName`
+- Modules provision resources inside the workload resource group by setting `scope: resourceGroup(resourceGroupName)` and adding `dependsOn: [ workloadRg ]` where `workloadRg` is the resource-group module.
+- Outputs: at least `resourceGroupName`, `vnetName`, `nsgSubnets` (array of `{ subNetName, nsgName }`) to satisfy `deployBicep.sh` post-processing.
 
 ### Required module invocations
 Use the following AVM modules (latest verified versions as of 2024-04-01). Reference format: `br/public:{modulePath}:{version}`.
+
+> ℹ️ **Module version format**: AVM releases use a three-part semantic version (`aa.bb.cc`). Cross-check each module against the **Status & Versions** column on the [AVM Bicep index](https://azure.github.io/Azure-Verified-Modules/indexes/bicep/bicep-resource-modules/). If the published tag only exposes two segments (for example `0.12`), confirm no newer tag exists on the index and pad the value to `0.12.0` when referencing it from `br/public`. No extra `bicepconfig.json` alias is required—the public registry is already reachable via the built-in `br/public` prefix.
 
 | Purpose | Module path | Version |
 | --- | --- | --- |
@@ -106,7 +110,7 @@ Add further AVM modules (e.g., AKS, Bastion, VPN) when a spec calls for them. Al
 
 ### Example skeleton (trim as needed)
 ```bicep
-targetScope = 'resourceGroup'
+targetScope = 'subscription'
 
 param organization string
 param project string
@@ -116,9 +120,40 @@ param vnetAddressPrefixes array
 param subnetDefinitions array
 
 var workloadName = '${organization}-${project}'
+var resourceGroupName = workloadName
+
+module workloadRg 'br/public:avm/res/resources/resource-group:0.4' = {
+  name: 'rg-${workloadName}'
+  params: {
+    name: resourceGroupName
+    location: location
+    tags: tags
+  }
+}
+
+module nsgs 'br/public:avm/res/network/network-security-group:0.5' = [
+  for subnet in subnetDefinitions: {
+    name: 'nsg-${workloadName}-${subnet.usage}'
+    scope: resourceGroup(resourceGroupName)
+    dependsOn: [
+      workloadRg
+    ]
+    params: {
+      name: '${workloadName}-${subnet.usage}-nsg'
+      location: location
+      securityRules: [] // populate from spec
+      tags: tags
+    }
+  }
+]
 
 module vnet 'br/public:avm/res/network/virtual-network:0.7' = {
   name: 'vnet-${workloadName}'
+  scope: resourceGroup(resourceGroupName)
+  dependsOn: [
+    workloadRg
+    nsgs
+  ]
   params: {
     name: '${workloadName}-vnet'
     location: location
@@ -134,8 +169,9 @@ module vnet 'br/public:avm/res/network/virtual-network:0.7' = {
   }
 }
 
-// Instantiate NSGs, storage, SQL, web apps, private endpoints, DNS links…
+// Instantiate storage, SQL, web apps, private endpoints, DNS links, and monitoring modules with the same scope pattern.
 
+output resourceGroupName string = resourceGroupName
 output vnetName string = vnet.outputs.name
 output nsgSubnets array = [
   for subnet in subnetDefinitions: {
