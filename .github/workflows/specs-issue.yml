@@ -66,17 +66,17 @@ jobs:
               for (const file of files) {
                 const match = regex.exec(file);
                 if (match) {
-                  const authority = match[1];
-                  const resourceGroup = match[2];
-                  const specPath = `specs/${authority}/${resourceGroup}`;
+                  const organization = match[1];
+                  const project = match[2];
+                  const specPath = `specs/${organization}/${project}`;
                   const commitSha = commit?.id || commit?.sha || context.sha;
 
-                  core.setOutput('authority', authority);
-                  core.setOutput('resourceGroup', resourceGroup);
+                  core.setOutput('organization', organization);
+                  core.setOutput('project', project);
                   core.setOutput('specPath', specPath);
                   core.setOutput('commitSha', commitSha);
-                  core.exportVariable('AUTHORITY', authority);
-                  core.exportVariable('RESOURCE_GROUP', resourceGroup);
+                  core.exportVariable('ORGANIZATION', organization);
+                  core.exportVariable('PROJECT', project);
                   core.exportVariable('SPEC_PATH', specPath);
                   core.exportVariable('COMMIT_SHA', commitSha);
                   return;
@@ -92,17 +92,17 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const authority = process.env.AUTHORITY;
-            const resourceGroup = process.env.RESOURCE_GROUP;
+            const organization = process.env.ORGANIZATION;
+            const project = process.env.PROJECT;
             const specPath = process.env.SPEC_PATH;
             const commitSha = process.env.COMMIT_SHA;
 
-            if (!authority || !resourceGroup) {
-              core.setFailed('Missing authority or resource group information.');
+            if (!organization || !project) {
+              core.setFailed('Missing organization or project information.');
               return;
             }
 
-            const issueTitle = `Specs update for ${authority}/${resourceGroup}`;
+            const issueTitle = `Specs update for ${organization}/${project}`;
 
             const { data: existingIssues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
@@ -114,7 +114,7 @@ jobs:
             const alreadyOpen = existingIssues.find((issue) => issue.title === issueTitle);
 
             if (alreadyOpen) {
-              core.info(`Issue #${alreadyOpen.number} already exists for ${authority}/${resourceGroup}.`);
+              core.info(`Issue #${alreadyOpen.number} already exists for ${organization}/${project}.`);
               return;
             }
 
@@ -125,11 +125,11 @@ jobs:
             const body = [
               '## Specs update detected',
               '',
-              `- **Authority**: \`${authority}\``,
-              `- **Resource Group**: \`${resourceGroup}\``,
+              `- **Organization**: \`${organization}\``,
+              `- **Project**: \`${project}\``,
               `- **Specs path**: \`${specPath}\``,
               '',
-              `Create the needed bicep parameter file and folder structure for authority \`${authority}\` and resource group \`${resourceGroup}\` based on the provided specifications Excel file located under the apps folder for this authority and resource group.`,
+              `Create the needed workload template and parameter files for organization \`${organization}\` and project \`${project}\` based on the provided specification workbook located under \`${specPath}\`.`,
               '',
               `Commit: [${shortSha}](${link})`,
               '',
