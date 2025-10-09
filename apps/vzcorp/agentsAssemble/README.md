@@ -76,8 +76,14 @@ Parameter file for the deployment with all configuration values.
 
 #### Using the deployment script:
 ```bash
-./deployBicep.sh -o vzcorp -p agentsAssemble
+# Current script syntax (using -m for organization/agency, -r for project)
+./deployBicep.sh -m vzcorp -r agentsAssemble
+
+# Or with subscription specified
+./deployBicep.sh -s subscription-name -m vzcorp -r agentsAssemble
 ```
+
+> **Note**: The deployment script currently uses `-m` (ministry/agency) and `-r` (resource group/project) flags. According to the repository documentation, these should be updated to `-o` (organization) and `-p` (project) for consistency.
 
 #### Using Azure CLI directly:
 ```bash
