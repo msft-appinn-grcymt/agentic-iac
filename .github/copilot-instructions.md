@@ -1,176 +1,204 @@
-# GSIS Agentic IaC - Copilot Agent Instructions
+# GSIS Agentic IaC – Copilot Agent Instructions
 
-## Repository Overview
-This repository contains Infrastructure as Code (IaC) modules written in Bicep for deploying Azure resources following organizational best practices including naming conventions and security requirements.
+## Mission Overview
+This repository provisions secure-by-default Azure landing zones from specification Excel files. All infrastructure must now be composed with **Azure Verified Modules (AVM)** sourced from the public Bicep registry. The Copilot agent is responsible for translating each request into:
 
-## Repository Structure
+1. A dedicated `main.bicep` authored with AVM references.
+2. A matching `deploy.bicepparam` parameter file.
+3. Validation evidence that the configuration builds with `bicep build` before handing off.
+
+## Repository Layout & Naming
 ```
 /
-├── azure.deploy.bicep          # Entry point - references main.bicep
-├── main.bicep                  # Main orchestration file with module invocations
-├── deployBicep.sh              # Deployment shell script
-├── apps/                       # Project-specific parameter files
-│   └── {authority}/            # e.g., MIN6969
-│       └── {resourceGroup}/    # e.g., RG6969
-│           └── deploy.bicepparam  # Bicep parameter file
-├── specs/                      # Excel specifications for incoming requests
-│   └── {authority}/            # e.g., MIN6969
-│       └── {resourceGroup}/    # e.g., RG6969
-│           └── *.xlsx          # Single source of truth for requested resources; sheet 1 lists components to deploy, sheet 2 captures network details and address ranges and the respective request number to be used
-└── modules/                    # Reusable Bicep modules (DO NOT MODIFY)
-    ├── Backup/                 # Recovery vault
-    ├── Compute/                # VMs, App Services, Static Web Apps
-    ├── Containers/             # AKS
-    ├── Databases/              # SQL, MySQL, PostgreSQL, CosmosDB
-    ├── Helpers/                # Naming conventions module
-    ├── Monitoring/             # Log Analytics, App Insights
-    ├── Networking/             # VNet, Subnets, NSG, Private Endpoints, Gateways
-    ├── Security/               # Key Vault
-    └── Storage/                # Storage Accounts
+├── azure.deploy.bicep          # Subscription-scope entry point (wraps apps/*/main.bicep)
+├── deployBicep.sh              # Deployment helper script (expects organization/project flags)
+├── apps/
+│   └── {organization}/
+│       └── {project}/
+│           ├── main.bicep      # AVM-based workload template (author per request)
+│           └── deploy.bicepparam
+├── specs/
+│   └── {organization}/
+│       └── {project}/
+│           └── *.xlsx          # Sheet 1: components, Sheet 2: network & request metadata
+└── modules/                    # Legacy custom modules (keep read-only; no new usage)
 ```
 
-## Key Principles
-1. **DO NOT modify Bicep code** in `azure.deploy.bicep`, `main.bicep`, or any files in `modules/`
-2. **Only create/modify** `.bicepparam` files under `apps/{authority}/{resourceGroup}/`
-3. **All changes** are parameter-driven - modules support extensive parameterization
-4. **Network deployment always occurs** - other resources are optional via flags
+### Canonical vocabulary
+- **organization** replaces historical “authority” (folder name under `apps/` and `specs/`).
+- **project** replaces historical “resourceGroup” (second-level folder name).
+- The Azure resource group must exist up-front and be named `${organization}-${project}` (all uppercase preserved from specs). If it is missing, stop and raise the gap.
+- Everywhere we collect metadata, tag and label resources with at least:
+  - `applicationNumber`: Excel request id (Sheet 2)
+  - `organization`, `project`
+  - `environment`: derive from spec (e.g., `Prod`, `Test`) when provided
 
-## Deployment Workflow
-GitHub Actions workflow (`.github/workflows/deploy.yaml`) triggered manually with:
-- **authority**: Maps to folder under `apps/` (e.g., MIN6969)
-- **resourceGroup**: Maps to subfolder (e.g., RG6969)
-- Executes: `bash deployBicep.sh -m {authority} -r {resourceGroup}`
-- Parameter file location: `apps/{authority}/{resourceGroup}/deploy.bicepparam`
-- Specification file location: `specs/{authority}/{resourceGroup}/*.xlsx`
+## Non-negotiable Guardrails
+1. **Azure Verified Modules only** – reference the versions in the table below; never call modules from `modules/`.
+2. **Private-first networking** – every workload component must land inside the hub VNet, expose only private endpoints, and integrate with private DNS zones.
+3. **No public ingress** – disable public access for Storage, SQL, App Services, etc. Use service endpoints or private endpoints as required by AVM parameters.
+4. **Subnet hygiene** – allocate non-overlapping CIDR ranges and link each subnet to an NSG. Reserve dedicated subnets per workload type exactly as the spec defines.
+5. **Reproducible builds** – run `bicep build` for the generated `main.bicep` and `deploy.bicepparam` before completion; capture failures with remediation notes.
 
-### Resource Discovery Pre-check
-- Use the Azure MCP tooling to query the subscription for existing resources prior to authoring parameters and any potential conflicts with the to-be deployed resources.In addition, the resource group (in format authority-resourceGroup, e.g., MIN200-RG240) must exist  before the deployment.If it doesn't then don't proceed with the deployment and report the issue.Check if the resource group or any other existing resources match the deployment requirements as well as if they are deployed on another region than the one specified in the parameters for the resources to be created.
-- Look for matches in the target resource group named `{authority}-{resourceGroup}` (e.g., MIN200-RG240).
-- Document any pre-existing resources that satisfy or conflict with the Excel requirements before proceeding with changes.
+## Resource discovery checklist
+Before producing files, query Azure (using MCP tooling) for the subscription defined in the spec:
+- Verify the `${organization}-${project}` resource group exists in the expected region.
+- List existing VNet, subnets, private endpoints, and DNS zones. Note any naming or IP conflicts.
+- Flag conflicts in the summary section of your response; do not overwrite existing assets unless the spec explicitly calls for updates.
 
-## Parameter File Structure
+## How to read the specification Excel
+1. **Sheet 1 – Components:** lists resource types, SKUs, counts, and optional integrators (e.g., “App Service Plan P1v3 x2”). Group rows by compatible settings (runtime, SKU) when modeling modules.
+2. **Sheet 2 – Networking:** provides the request number, region, VNet address space, subnet breakdown, DNS requirements, and any integration notes.
+3. Cross-check both sheets for consistency (e.g., Storage account referenced in Sheet 1 must have a subnet in Sheet 2 tagged `Storage`). Raise discrepancies.
 
-### Required Parameters (Every Deployment)
+## Authoring `apps/{organization}/{project}/main.bicep`
+
+### Scope & contract
+- `targetScope = 'resourceGroup'`
+- Parameters (minimum):
+  - `param organization string`
+  - `param project string`
+  - `param location string`
+  - `param tags object`
+  - `param vnetAddressPrefixes array`
+  - `param subnetDefinitions array` (objects with `name`, `usage`, `addressPrefix`)
+- Derived locals:
+  - `var workloadName = '${organization}-${project}'`
+- Outputs: at least `vnetName`, `nsgSubnets` (array of `{ subNetName, nsgName }`) to satisfy `deployBicep.sh` post-processing.
+
+### Required module invocations
+Use the following AVM modules (latest verified versions as of 2024-04-01). Reference format: `br/public:{modulePath}:{version}`.
+
+| Purpose | Module path | Version |
+| --- | --- | --- |
+| Resource group metadata (used at subscription scope in `azure.deploy.bicep`) | `avm/res/resources/resource-group` | 0.4 |
+| Virtual network + subnets | `avm/res/network/virtual-network` | 0.7 |
+| Network security groups | `avm/res/network/network-security-group` | 0.5 |
+| Private endpoint | `avm/res/network/private-endpoint` | 0.11 |
+| Private DNS zone | `avm/res/network/private-dns-zone` | 0.8 |
+| Private DNS zone VNet link | `avm/res/network/private-dns-zone/virtual-network-link` | 0.8 |
+| Storage account | `avm/res/storage/storage-account` | 0.27 |
+| Key Vault | `avm/res/key-vault/vault` | 0.13 |
+| SQL server | `avm/res/sql/server` | 0.20 |
+| SQL database | `avm/res/sql/server/database` | 0.1 |
+| App Service plan | `avm/res/web/serverfarm` | 0.5 |
+| App Service (web app) | `avm/res/web/site` | 0.19 |
+| Log Analytics workspace | `avm/res/operational-insights/workspace` | 0.12 |
+| Application Insights | `avm/res/insights/component` | 0.6 |
+
+Add further AVM modules (e.g., AKS, Bastion, VPN) when a spec calls for them. Always cite the version in comments for traceability.
+
+### Networking blueprint
+- Deploy a single VNet using the spec’s address space.
+- For each subnet row, create:
+  1. An NSG (`network-security-group` module) with rules derived from the spec.
+  2. A subnet entry in the VNet module referencing the NSG resource id.
+- When a workload supports private endpoints (Storage, SQL, Web Apps, etc.), instantiate:
+  - A `private-endpoint` module targeting the service.
+  - A matching `private-dns-zone` module (one per service type) and a `virtual-network-link` back to the VNet.
+- Ensure web apps are integrated with the VNet (`siteConfig.vnetRouteAllEnabled = true`, `virtualNetworkSubnetId` pointing to the correct subnet).
+- Disable public network access via the relevant AVM parameters (`publicNetworkAccess`, `allowBlobPublicAccess`, `httpsOnly`, etc.).
+
+### Observability & security
+- Always provision Log Analytics and Application Insights when any compute workload exists.
+- Key Vaults must have soft delete and purge protection enabled and use private endpoints.
+- SQL servers must restrict public network access and enable Auditing and Threat Detection if the module exposes the switches.
+
+### Example skeleton (trim as needed)
 ```bicep
-using '../../../azure.deploy.bicep'
+targetScope = 'resourceGroup'
+
+param organization string
+param project string
+param location string
+param tags object
+param vnetAddressPrefixes array
+param subnetDefinitions array
+
+var workloadName = '${organization}-${project}'
+
+module vnet 'br/public:avm/res/network/virtual-network:0.7' = {
+  name: 'vnet-${workloadName}'
+  params: {
+    name: '${workloadName}-vnet'
+    location: location
+    addressPrefixes: vnetAddressPrefixes
+    subnets: [
+      for subnet in subnetDefinitions: {
+        name: subnet.name
+        addressPrefix: subnet.addressPrefix
+        networkSecurityGroupId: resourceId('Microsoft.Network/networkSecurityGroups', '${workloadName}-${subnet.usage}-nsg')
+      }
+    ]
+    tags: tags
+  }
+}
+
+// Instantiate NSGs, storage, SQL, web apps, private endpoints, DNS links…
+
+output vnetName string = vnet.outputs.name
+output nsgSubnets array = [
+  for subnet in subnetDefinitions: {
+    subNetName: subnet.name
+    nsgName: '${workloadName}-${subnet.usage}-nsg'
+  }
+]
+```
+
+## Authoring `deploy.bicepparam`
+
+Place alongside `main.bicep` and reference it with a relative using statement:
+
+```bicep
+using './main.bicep'
 
 var requestNumber = '9999'
-param intRequestNumber = requestNumber
-param agency = 'MIN6969'              // Authority/Ministry name
-param project = 'RG6969'              // Resource Group ID
-param location = 'West Europe'        // Azure region
-param tags = { applicationNumber: requestNumber }
-param vnetAddressPrefix = ['192.168.0.0/16']
-```
-
-### Subnet Configuration (Always Required)
-```bicep
-param subnets = [
-  { addressPrefix: '192.168.0.0/27', usage: 'VM' }
-  { addressPrefix: '192.168.1.0/27', usage: 'VM/PrivateEndpoint' }
-  { addressPrefix: '192.168.2.0/27', usage: 'AppService' }
-  { addressPrefix: '192.168.3.0/28', usage: 'AppGateway' }
-  { addressPrefix: '192.168.4.0/27', usage: 'mySQL' }
-  { addressPrefix: '192.168.5.0/27', usage: 'Postgres' }
-  { addressPrefix: '192.168.6.0/27', usage: 'VpnGateway' }
-  { addressPrefix: '192.168.7.0/27', usage: 'AKS' }
+param organization = 'MIN800'
+param project = 'RG805'
+param location = 'westeurope'
+param tags = {
+  applicationNumber: requestNumber
+  organization: organization
+  project: project
+}
+param vnetAddressPrefixes = [
+  '10.10.0.0/16'
 ]
-// Valid usage values: VM, VM/PrivateEndpoint, AppService, mySQL, Postgres, AppGateway, VpnGateway, AKS
-```
-
-## Resource Modules & Parameters
-
-### Compute Resources
-**App Service**: `param appServiceCount = 2` (0 to disable), `param appServiceSkuName = 'P1v3'`, `param appServiceRuntime = 'linux*DOCKER|...'` (see allowed values in azure.deploy.bicep)
-
-**Virtual Machines** (Array of Batches):
-```bicep
-param vmBatches = [
-  {
-    vmBatchName: 'A', vmCount: 3, vmsize: 'Standard_D4s_v4', subnetIndex: 1,
-    vmOSType: 'Linux', vmOSpublisher: 'Canonical', vmOSOffer: '0001-com-ubuntu-server-jammy',
-    vmOSSku: '22_04-lts-gen2', vmOSDiskType: 'StandardSSD_LRS', vmOSDiskSizeGB: 256, vmOSDiskDeleteOption: 'Delete'
-  }
-]
-param vmAdminUsername = 'azureuser'
-param vmAdminPassword = readEnvironmentVariable('IAC_VM_PWD','')
-```
-
-### Database Resources
-**SQL Server**: `param sqlServerCount = 1`, `param sqlDbCount = 1`, `param sqlTier = 'Standard'`, `param sqlSkuName = 'S3'`, `param sqlServerAdmin = 'localadmin'`, `param sqlServerPwd = readEnvironmentVariable('IAC_SQL_PWD','')`
-
-**MySQL** (Array of Instances):
-```bicep
-param mySqlBatches = [
-  { name: 'mysql01', skuName: 'Standard_D2ads_v5', skuTier: 'GeneralPurpose', storageSizeGB: 64, subnetIndex: 4 }
-]
-param mySqlAdmin = 'mysqladmin'
-param mySqlAdminPassword = readEnvironmentVariable('IAC_MYSQL_PWD','')
-```
-
-**PostgreSQL** (Array of Instances):
-```bicep
-param postgreSqlBatches = [
-  { name: 'postgres01', skuName: 'Standard_D2s_v3', skuTier: 'GeneralPurpose', storageSizeGB: 128, subnetIndex: 5 }
-]
-param postgresAdmin = 'postgresadmin'
-param postgresAdminPassword = readEnvironmentVariable('IAC_PG_PWD','')
-```
-
-**CosmosDB**: `param createCosmosDb = true` (boolean flag)
-
-### Networking Resources
-**Application Gateway**: `param createAppGateway = true`, `param appGWSkuTier = 'WAF_v2'`, `param appGwMaxCapacity = 5`
-**VPN Gateway**: `param createVpnGw = true`
-**NAT Gateway**: `param createNatGw = true`
-**Load Balancer**: `param createLoadBalancer = true`, `param loadBalancerPublic = false`, `param loadBalancerSubnetIndex = 0`
-**Bastion**: `param createBastion = true`, `param bastionVnetAddressPrefix = ['192.168.0.0/16']`
-**DDoS Protection**: `param enableDdosProtection = true`
-
-### Security & Storage
-**Key Vault**: `param keyVaultCount = 2` (creates 2 Key Vaults, 0 to disable)
-**Storage Account**: `param storageAccountCount = 1`, `param storageBlobPrivateEndpoint = true`, `param storageFilePrivateEndpoint = true`, `param storageTablePrivateEndpoint = false`, `param storageQueuePrivateEndpoint = false`
-
-### Monitoring
-**Log Analytics**: `param createLogAnalytics = true`
-**Application Insights**: `param createAppInsights = true`
-
-### Containers
-**AKS** (Array of Clusters):
-```bicep
-param AKSClusterBatches = [
-  {
-    name: 'aks01', tier: 'Standard', subnetIndex: 7, systemPoolNodeCount: 3,
-    systemPoolNodeSize: 'standard_d4s_v5', applicationPoolNodeCount: 3,
-    applicationPoolNodeSize: 'standard_d4s_v5', azRedundant: true
-  }
+param subnetDefinitions = [
+  { name: 'snet-apps', usage: 'AppService', addressPrefix: '10.10.0.0/24' }
+  { name: 'snet-pe', usage: 'PrivateEndpoint', addressPrefix: '10.10.1.0/24' }
+  { name: 'snet-sql', usage: 'Sql', addressPrefix: '10.10.2.0/24' }
 ]
 ```
 
-## Common Azure SKUs Reference
-- **App Service**: P1v3, P2v3, P3v3, S1, S2, S3, B1, B2, B3
-- **SQL Database**: Basic, S0-S12 (Standard), P1-P15 (Premium), GP_Gen5_2/4/8 (General Purpose), BC_Gen5_2/4/8 (Business Critical)
-- **VMs**: Standard_B2s, Standard_D2s_v3, Standard_D4s_v4, Standard_E2as_v4, Standard_E4as_v4
-- **MySQL/PostgreSQL**: Standard_B1ms, Standard_B2s, Standard_D2ads_v5, Standard_D4ads_v5
+Augment this file with additional parameters required by the instantiated modules (e.g., `sqlAdminLogin`, `appServicePlans`, `storageAccounts`). Store sensitive secrets in Key Vault references or environment variables; never inline them.
 
-## Creating Parameter Files from Azure Pricing Calculator Excel
-When provided an Azure Pricing Calculator xlsx:
-1. Create folder structure: `apps/{authority}/{resourceGroup}/`
-2. Create `deploy.bicepparam` with required parameters (agency, project, location, vnetAddressPrefix, subnets)
-3. Map Excel resources to parameters:
-   - VM rows → `vmBatches` array (group by SKU/OS)
-   - SQL rows → `sqlServerCount`, `sqlDbCount`, `sqlSkuName`, `sqlTier`
-   - App Service rows → `appServiceCount`, `appServiceSkuName`, `appServiceRuntime`
-   - Storage rows → `storageAccountCount` + private endpoint flags
-   - Key Vault rows → `keyVaultCount`
-   - AKS rows → `AKSClusterBatches` array
-   - MySQL/PostgreSQL rows → `mySqlBatches`/`postgreSqlBatches` arrays
-4. Set count to 0 or empty array `[]` for unused resources
-5. Define subnets with appropriate CIDR ranges and usage tags for all resources
-6. Set boolean flags (`createAppGateway`, `createLogAnalytics`, etc.) based on Excel presence
+## Translating Excel ➜ AVM parameters
 
-## Limitations to Report
-If requirements cannot be met due to module constraints:
-- Document the limitation clearly (e.g., "Module does not support zone redundancy configuration")
-- State what is "baked in" to the module that prevents the requirement
-- Suggest workarounds if available (e.g., "Parameter can be modified post-deployment via Azure Portal")
+| Excel cue | Bicep representation |
+| --- | --- |
+| Sheet 1 row `App Service Plan` | Append to `appServicePlans` array with SKU, worker count, OS. Pair each plan with at least one `webSites` entry. |
+| Sheet 1 row `SQL Database` | Create an entry in `sqlServers` (one per unique server) and `sqlDatabases` for each DB. Use the plan’s edition and max size. |
+| Sheet 1 row `Storage Account` | Add to `storageAccounts` array with `kind`, `skuName`, and boolean switches for blob/file/table/queue private endpoints. |
+| Networking sheet subnets | Populate `subnetDefinitions`; ensure naming aligns with NSG + workload use. |
+| Request number | Populate `requestNumber` variable and propagate to tags. |
+
+Document assumptions directly in the PR summary when data is missing (e.g., defaulting to `ZRS` storage redundancy).
+
+## Deployment workflow (manual & CI)
+- Parameter discovery and file authoring always happen in `apps/{organization}/{project}`.
+- Run the helper script from repo root once it supports the new arguments: `./deployBicep.sh -o MIN800 -p RG805`. Until the rename lands, keep backward compatibility with `-m/-r` but surface the discrepancy in your summary.
+- GitHub workflow (`deploy.yaml`) should be triggered with `organization` & `project` inputs; update documentation if new inputs are introduced.
+
+## Validation steps before completion
+1. `bicep build apps/{organization}/{project}/main.bicep`
+2. `bicep build apps/{organization}/{project}/deploy.bicepparam`
+3. Lint for unused parameters and ensure all module references resolve.
+4. Summarize outputs and note any manual follow-up (e.g., Key Vault access policies to be assigned post-deployment).
+
+## Reporting gaps or limitations
+- If AVM modules currently miss a required feature, state it explicitly and suggest the closest achievable configuration.
+- Highlight any tenant policy that blocks private endpoints or zone creations.
+- Provide remediation or post-deployment tasks when automation cannot fulfil a requirement (e.g., certificate upload to App Service).
+
+Keep the guidance current; revisit AVM versions quarterly and update this document with changelog entries.
