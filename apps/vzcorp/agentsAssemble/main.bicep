@@ -56,7 +56,7 @@ module vnet 'br/public:avm/res/network/virtual-network:0.7.0' = {
         name: subnet.name
         addressPrefix: subnet.addressPrefix
         networkSecurityGroupResourceId: nsgs[i].outputs.resourceId
-        delegations: subnet.usage == 'AppService' ? [
+        delegation: subnet.usage == 'AppService' ? [
           {
             name: 'delegation'
             properties: {
