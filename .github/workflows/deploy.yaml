@@ -11,11 +11,11 @@ on:
       authority:
         description: "Ministry/Authority Name"
         required: true
-        default: MIN
+        default: vzcorp
       resourceGroup:
         description: "Resource Group Id"
         required: true
-        default: RG
+        default: agents
 
 permissions:
   id-token: write
