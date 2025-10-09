@@ -21,12 +21,12 @@ This repository provisions secure-by-default Azure landing zones from specificat
 │   └── {organization}/
 │       └── {project}/
 │           └── *.xlsx          # Sheet 1: components, Sheet 2: network & request metadata
-└── modules/                    # Legacy custom modules (keep read-only; no new usage)
+└── (no local module library)   # All components authored with Azure Verified Modules
 ```
 
 ### Canonical vocabulary
-- **organization** replaces historical “authority” (folder name under `apps/` and `specs/`).
-- **project** replaces historical “resourceGroup” (second-level folder name).
+- **organization** identifies the top-level requestor folder under `apps/` and `specs/`.
+- **project** identifies the workload folder nested beneath the organization.
 - The Azure resource group must exist up-front and be named `${organization}-${project}` (all uppercase preserved from specs). If it is missing, stop and raise the gap.
 - Everywhere we collect metadata, tag and label resources with at least:
   - `applicationNumber`: Excel request id (Sheet 2)
@@ -34,7 +34,7 @@ This repository provisions secure-by-default Azure landing zones from specificat
   - `environment`: derive from spec (e.g., `Prod`, `Test`) when provided
 
 ## Non-negotiable Guardrails
-1. **Azure Verified Modules only** – reference the versions in the table below; never call modules from `modules/`.
+1. **Azure Verified Modules only** – reference the versions in the table below; do not create or reuse local module files.
 2. **Private-first networking** – every workload component must land inside the hub VNet, expose only private endpoints, and integrate with private DNS zones.
 3. **No public ingress** – disable public access for Storage, SQL, App Services, etc. Use service endpoints or private endpoints as required by AVM parameters.
 4. **Subnet hygiene** – allocate non-overlapping CIDR ranges and link each subnet to an NSG. Reserve dedicated subnets per workload type exactly as the spec defines.
