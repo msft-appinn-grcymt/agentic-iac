@@ -1,0 +1,41 @@
+name: Deploy Infrastructure
+
+on:
+#  push:
+#     branches:
+#       - main
+#     paths:
+#       - ms-roles-api/*
+ workflow_dispatch:                
+    inputs:
+      authority:
+        description: "Ministry/Authority Name"
+        required: true
+        default: MIN
+      resourceGroup:
+        description: "Resource Group Id"
+        required: true
+        default: RG
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  create-infra:
+    name: "Create Infrastructure - Deploy Bicep templates for ${{ inputs.authority }} in Resource Group ${{ inputs.resourceGroup }}"
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout code
+    - uses: actions/checkout@main
+      name: Checkout Code
+      # Log into Azure
+    - uses: azure/login@v2
+      name: 'Login via Azure CLI using Managed Identity'
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}      
+      # Deploy Bicep templates
+    - name: 'Execute Bicep Deployment Script'
+      run: bash deployBicep.sh -m ${{ inputs.authority }} -r ${{ inputs.resourceGroup }}

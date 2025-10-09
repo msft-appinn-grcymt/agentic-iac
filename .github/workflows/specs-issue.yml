@@ -1,0 +1,169 @@
+name: Track Specs Updates
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'specs/**'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  raise-tracking-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Derive specs folder context
+        id: derive
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const regex = /^specs\/([^\/]+)\/([^\/]+)\//i;
+            const commits = [...(context.payload.commits ?? [])];
+
+            if (!commits.length && context.payload.head_commit) {
+              commits.push(context.payload.head_commit);
+            }
+
+            const pick = (value) => (Array.isArray(value) ? value : []);
+
+            const gatherFiles = async (commit) => {
+              const direct = [
+                ...pick(commit.added),
+                ...pick(commit.modified),
+                ...pick(commit.removed),
+              ];
+
+              if (direct.length) {
+                return direct;
+              }
+
+              const ref = commit?.id || commit?.sha || context.sha;
+
+              if (!ref) {
+                return [];
+              }
+
+              try {
+                const { data } = await github.rest.repos.getCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref,
+                });
+
+                return (data.files ?? []).map((file) => file.filename);
+              } catch (error) {
+                core.warning(`Failed to retrieve commit details for ${ref}: ${error.message}`);
+                return [];
+              }
+            };
+
+            for (const commit of commits) {
+              const files = await gatherFiles(commit);
+              for (const file of files) {
+                const match = regex.exec(file);
+                if (match) {
+                  const authority = match[1];
+                  const resourceGroup = match[2];
+                  const specPath = `specs/${authority}/${resourceGroup}`;
+                  const commitSha = commit?.id || commit?.sha || context.sha;
+
+                  core.setOutput('authority', authority);
+                  core.setOutput('resourceGroup', resourceGroup);
+                  core.setOutput('specPath', specPath);
+                  core.setOutput('commitSha', commitSha);
+                  core.exportVariable('AUTHORITY', authority);
+                  core.exportVariable('RESOURCE_GROUP', resourceGroup);
+                  core.exportVariable('SPEC_PATH', specPath);
+                  core.exportVariable('COMMIT_SHA', commitSha);
+                  return;
+                }
+              }
+            }
+
+            core.setFailed('No specs folder changes were detected in the push payload.');
+
+      - name: Create or reuse tracking issue
+        uses: actions/github-script@v7
+        if: ${{ steps.derive.outcome == 'success' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const authority = process.env.AUTHORITY;
+            const resourceGroup = process.env.RESOURCE_GROUP;
+            const specPath = process.env.SPEC_PATH;
+            const commitSha = process.env.COMMIT_SHA;
+
+            if (!authority || !resourceGroup) {
+              core.setFailed('Missing authority or resource group information.');
+              return;
+            }
+
+            const issueTitle = `Specs update for ${authority}/${resourceGroup}`;
+
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const alreadyOpen = existingIssues.find((issue) => issue.title === issueTitle);
+
+            if (alreadyOpen) {
+              core.info(`Issue #${alreadyOpen.number} already exists for ${authority}/${resourceGroup}.`);
+              return;
+            }
+
+            const shortSha = commitSha ? commitSha.substring(0, 7) : context.sha.substring(0, 7);
+            const repoUrl = context.payload.repository?.html_url;
+            const link = commitSha && repoUrl ? `${repoUrl}/commit/${commitSha}` : context.payload.compare;
+
+            const body = [
+              '## Specs update detected',
+              '',
+              `- **Authority**: \`${authority}\``,
+              `- **Resource Group**: \`${resourceGroup}\``,
+              `- **Specs path**: \`${specPath}\``,
+              '',
+              `Create the needed bicep parameter file and folder structure for authority \`${authority}\` and resource group \`${resourceGroup}\` based on the provided specifications Excel file located under the apps folder for this authority and resource group.`,
+              '',
+              `Commit: [${shortSha}](${link})`,
+              '',
+
+              '> Created automatically by the specs watcher workflow.'
+            ].join('\n');
+
+            const issuePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body,
+            };
+
+            const tryAssign = async () => {
+              try {
+                await github.rest.issues.create({
+                  ...issuePayload,
+                  assignees: ['copilot'],
+                });
+                return true;
+              } catch (error) {
+                if (error?.status === 422) {
+                  const message = typeof error === 'object' && error !== null ? error.message : String(error);
+                  core.warning(`Failed to assign issue to copilot: ${message}. Creating issue without assignee.`);
+                  return false;
+                }
+
+                throw error;
+              }
+            };
+
+            const assigned = await tryAssign();
+
+            if (!assigned) {
+              await github.rest.issues.create(issuePayload);
+            }
