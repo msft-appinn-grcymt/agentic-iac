@@ -36,7 +36,7 @@ This repository provisions secure-by-default Azure landing zones from specificat
 2. **Private-first networking** – every workload component must land inside the hub VNet, expose only private endpoints, and integrate with private DNS zones.
 3. **No public ingress** – disable public access for Storage, SQL, App Services, etc. Use service endpoints or private endpoints as required by AVM parameters.
 4. **Subnet hygiene** – allocate non-overlapping CIDR ranges and link each subnet to an NSG. Reserve dedicated subnets per workload type exactly as the spec defines.
-5. **Reproducible builds** – author code that would succeed under `bicep build` when registry access is available; document any assumptions and rely on the deploy-infra workflow for final validation until connectivity gaps are resolved.
+5. **Reproducible builds** – author code that succeeds under `bicep build`, resolve all syntax issues locally, and document any assumptions for downstream validation.
 
 ## Resource discovery checklist
 Before producing files, query Azure (using MCP tooling) for the subscription defined in the spec:
@@ -200,13 +200,12 @@ Document assumptions directly in the PR summary when data is missing (e.g., defa
 - GitHub workflow (`deploy.yaml`) should be triggered with `organization` & `project` inputs; update documentation if new inputs are introduced.
 
 ## Validation steps before completion
-> ⚠️ **Offline registry access**: due to network limitations, the CI runners cannot reach the Microsoft Container Registry backing AVM packages. Local `bicep build` or `bicep publish` commands will fail when they attempt to pull remote modules. Only perform static validation (syntax, parameter completeness, documented defaults) locally and rely on the deployment workflow for runtime verification.
-
 1. Review the generated files for syntax correctness (matching braces, parameter types, module names/versions) and cross-check against AVM documentation.
-2. Run local linting (`bicep lint` or equivalent analyzers) to catch structural issues that do not require pulling registry artifacts; resolve all warnings that impact deployment safety.
-3. Ensure required parameters and tags are present, private networking flags are set, and module outputs align with downstream scripts.
-4. Submit the changes and monitor the deploy-infra GitHub Action, which will evaluate the templates against the actual registry during execution.
-5. Capture any Action failures, document remediation steps, and iterate until the workflow succeeds.
+2. Run local linting (`bicep lint` or equivalent analyzers) and resolve all warnings that impact deployment safety.
+3. Build every updated Bicep file locally (`bicep build`) to ensure module references resolve and produce valid ARM templates.
+4. Ensure required parameters and tags are present, private networking flags are set, and module outputs align with downstream scripts.
+5. Submit the changes and monitor the deploy-infra GitHub Action for runtime validation against the registry.
+6. Capture any Action failures, document remediation steps, and iterate until the workflow succeeds.
 
 ## Reporting gaps or limitations
 - If AVM modules currently miss a required feature, state it explicitly and suggest the closest achievable configuration.
