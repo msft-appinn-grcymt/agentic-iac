@@ -31,7 +31,7 @@ This repository provisions secure-by-default Azure landing zones using specifica
 > - Tag every resource (directly or via module inputs) with at least `applicationNumber`, `organization`, `project`, and `environment` (derived from the spec).
 
 ## Non-negotiable Guardrails
-1. **AVM-only compositions** – reference modules published under [`Azure/terraform-azurerm-avm-res-*`](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/) with pinned versions; do not author bespoke Terraform resources unless the AVM library lacks required coverage.
+1. **AVM-only compositions** – reference modules published under [`Azure/terraform-azurerm-avm-res-*`](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/) with pinned versions. Before you author or update any module block, call `https://registry.terraform.io/v1/modules/Azure/<module>/azurerm/versions` and pin the highest semantic version whose `status` is `available`. Never reuse a previously hardcoded version or pick anything older than the latest available release. Do not author bespoke Terraform resources unless the AVM library lacks required coverage.
 2. **Private-first networking** – all services must land in hub virtual networks, expose only private endpoints, and integrate with private DNS zones.
 3. **No public ingress** – disable public exposure for Storage, SQL, App Services, etc. by aligning module inputs with private access patterns.
 4. **Subnet hygiene** – allocate non-overlapping CIDR ranges, assign NSGs per subnet, and honour the workload-specific subnet mapping from the spec.
@@ -59,7 +59,7 @@ Before authoring Terraform code, query Azure (using MCP tooling) for the subscri
 - Centralize tagging in local maps to ensure consistency across modules.
 
 ### Required AVM Terraform modules
-Use the latest **stable** verified versions (semantic `aa.bb.cc`) listed in the Terraform AVM index. Always pin `version = "x.y.z"` in each module block, confirming you select the newest stable release from the “Status & Versions” column on the [official index](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/). If the published tag exposes only two segments (e.g., `0.12`), append `.0` unless the index states otherwise (→ `0.12.0`).
+Use the latest **stable** verified versions (semantic `aa.bb.cc`) listed in the Terraform AVM index. Always pin `version = "x.y.z"` in each module block. You must query the Terraform Registry endpoint (`https://registry.terraform.io/v1/modules/Azure/<module>/azurerm/versions`) immediately before coding and select the highest `version` value flagged as `"status": "available"`. If the published tag exposes only two segments (e.g., `0.12`), append `.0` unless the index states otherwise (→ `0.12.0`). Document in your summary which endpoint responses were used to justify the chosen versions.
 
 | Purpose | Terraform registry source | Key inputs | Essential outputs consumed downstream |
 | --- | --- | --- | --- |
@@ -213,12 +213,13 @@ Document any assumptions (e.g., defaulting to `ZRS` redundancy) directly in your
 
 ## Validation steps before completion
 1. Execute `terraform fmt -recursive` inside the workload directory to enforce canonical formatting.
-2. Run `terraform init -upgrade -backend=false` to download AVM modules without touching remote state.
-3. Run `terraform validate` and resolve **all** errors and warnings.
-4. Produce a dry-run plan (`terraform plan -input=false -lock=false -out=tfplan`) using placeholder credentials or mocked values; ensure the plan completes without errors.
-5. Verify that tagging, private networking flags, and module outputs align with orchestration expectations.
-6. Submit the changes and monitor the deploy-infra pipeline for final registry validation.
-7. Capture any pipeline failures, document remediation steps, and iterate until the workflow reports success.
+2. Re-query `https://registry.terraform.io/v1/modules/Azure/<module>/azurerm/versions` for every module you pinned and confirm the committed versions still match the latest available entries. If a newer version exists, update the code before proceeding.
+3. Run `terraform init -upgrade -backend=false` to download AVM modules without touching remote state.
+4. Run `terraform validate` and resolve **all** errors and warnings.
+5. Produce a dry-run plan (`terraform plan -input=false -lock=false -out=tfplan`) using placeholder credentials or mocked values; ensure the plan completes without errors.
+6. Verify that tagging, private networking flags, and module outputs align with orchestration expectations.
+7. Submit the changes and monitor the deploy-infra pipeline for final registry validation.
+8. Capture any pipeline failures, document remediation steps, and iterate until the workflow reports success.
 
 ## Reporting gaps or limitations
 - If an AVM Terraform module lacks a required feature, state the limitation and recommend the closest achievable configuration or a follow-up item for the AVM maintainers.
