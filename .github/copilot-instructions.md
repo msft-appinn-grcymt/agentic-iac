@@ -36,6 +36,7 @@ This repository provisions secure-by-default Azure landing zones using specifica
 3. **No public ingress** – disable public exposure for Storage, SQL, App Services, etc. by aligning module inputs with private access patterns.
 4. **Subnet hygiene** – allocate non-overlapping CIDR ranges, assign NSGs per subnet, and honour the workload-specific subnet mapping from the spec.
 5. **Reproducible builds** – run `terraform fmt`, `terraform init`, `terraform validate`, and `terraform plan` locally (with non-destructive arguments) to ensure syntactic and semantic correctness before handing off.
+6. **Tooling alignment** – rely exclusively on the Terraform version provisioned by `.github/workflows/copilot-setup-steps.yml`; do not install or pin alternate Terraform builds in ad-hoc scripts or workflows.
 
 ## Resource discovery checklist
 Before authoring Terraform code, query Azure (using MCP tooling) for the subscription named in the spec:
@@ -58,7 +59,7 @@ Before authoring Terraform code, query Azure (using MCP tooling) for the subscri
 - Centralize tagging in local maps to ensure consistency across modules.
 
 ### Required AVM Terraform modules
-Use the latest verified versions (semantic `aa.bb.cc`) listed in the Terraform AVM index. Always pin `version = "x.y.z"` in each module block and cross-check the “Status & Versions” column on the [official index](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/). If the published tag exposes only two segments (e.g., `0.12`), append `.0` unless the index states otherwise (→ `0.12.0`).
+Use the latest **stable** verified versions (semantic `aa.bb.cc`) listed in the Terraform AVM index. Always pin `version = "x.y.z"` in each module block, confirming you select the newest stable release from the “Status & Versions” column on the [official index](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/). If the published tag exposes only two segments (e.g., `0.12`), append `.0` unless the index states otherwise (→ `0.12.0`).
 
 | Purpose | Terraform registry source | Key inputs | Essential outputs consumed downstream |
 | --- | --- | --- | --- |
