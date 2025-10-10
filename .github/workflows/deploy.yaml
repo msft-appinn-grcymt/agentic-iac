@@ -1,41 +1,60 @@
-name: Deploy Infrastructure
+name: Deploy Terraform Infrastructure
 
 on:
-#  push:
-#     branches:
-#       - main
-#     paths:
-#       - ms-roles-api/*
- workflow_dispatch:                
+  workflow_dispatch:
     inputs:
-      authority:
-        description: "Ministry/Authority Name"
+      organization:
+        description: "Organization folder under apps/"
         required: true
         default: vzcorp
-      resourceGroup:
-        description: "Resource Group Id"
+      project:
+        description: "Project folder under apps/{organization}/"
         required: true
-        default: agents
+        default: agentsAssemble
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  create-infra:
-    name: "Create Infrastructure - Deploy Bicep templates for ${{ inputs.authority }} in Resource Group ${{ inputs.resourceGroup }}"
+  deploy-infra:
+    name: "Deploy Terraform workload for ${{ inputs.organization }} / ${{ inputs.project }}"
     runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: true
     steps:
-      # Checkout code
-    - uses: actions/checkout@main
-      name: Checkout Code
-      # Log into Azure
-    - uses: azure/login@v2
-      name: 'Login via Azure CLI using Managed Identity'
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}      
-      # Deploy Bicep templates
-    - name: 'Execute Bicep Deployment Script'
-      run: bash deployBicep.sh -m ${{ inputs.authority }} -r ${{ inputs.resourceGroup }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login via Azure CLI using Federated Identity
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
+        run: terraform init -upgrade
+
+      - name: Terraform fmt check
+        working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
+        run: terraform validate
+
+      - name: Terraform plan
+        working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Terraform apply
+        working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
+        run: terraform apply -input=false -auto-approve tfplan
