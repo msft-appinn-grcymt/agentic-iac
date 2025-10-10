@@ -1,2 +1,9 @@
 # Build artifacts
 apps/**/deploy.json
+
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+**/*.tfplan
+**/*.tfstate
+**/*.tfstate.backup
