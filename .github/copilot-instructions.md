@@ -38,6 +38,31 @@ This repository provisions secure-by-default Azure landing zones using specifica
 5. **Reproducible builds** – run `terraform fmt`, `terraform init`, `terraform validate`, and `terraform plan` locally (with non-destructive arguments) to ensure syntactic and semantic correctness before handing off.
 6. **Tooling alignment** – rely exclusively on the Terraform version provisioned by `.github/workflows/copilot-setup-steps.yml`; do not install or pin alternate Terraform builds in ad-hoc scripts or workflows.
 
+## AVM module discovery & references
+
+### Terraform Registry search tips
+- Search for `avm` plus the Azure resource name (e.g., `avm storage account`).
+- Filter results by the **Partner** tag to isolate the officially verified AVM modules.
+- When you open a module, use the `latest` tab (for example `https://registry.terraform.io/modules/Azure/avm-res-storage-storageaccount/azurerm/latest`) as a quick synopsis, then drill into documentation as needed.
+
+### Official AVM index catalogues
+- **Terraform resources**: `https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/`
+- **Terraform patterns**: `https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-pattern-modules/`
+- **Bicep resources**: `https://azure.github.io/Azure-Verified-Modules/indexes/bicep/bicep-resource-modules/`
+- **Bicep patterns**: `https://azure.github.io/Azure-Verified-Modules/indexes/bicep/bicep-pattern-modules/`
+
+### Bootstrapping Terraform usage from examples
+1. Start with the example provided in the module documentation.
+2. Replace any relative `source = "../../"` style paths with the registry reference `source = "Azure/avm-res-{service}-{resource}/azurerm"` (or the appropriate pattern module path).
+3. Add an explicit `version = "x.y.z"`, where `x.y.z` is the latest **available** release retrieved from `https://registry.terraform.io/v1/modules/Azure/<module>/azurerm/versions`.
+4. Set `enable_telemetry = true` so usage metrics continue to inform AVM improvements.
+
+### Module source references
+- **Terraform Registry URL pattern**: `https://registry.terraform.io/modules/Azure/{module}/azurerm/latest`
+- **GitHub repository URL pattern**: `https://github.com/Azure/terraform-azurerm-avm-{type}-{service}-{resource}`
+  - Example resource module: `https://github.com/Azure/terraform-azurerm-avm-res-storage-storageaccount`
+  - Example pattern module: `https://github.com/Azure/terraform-azurerm-avm-ptn-aks-enterprise`
+
 ## Resource discovery checklist
 Before authoring Terraform code, query Azure (using MCP tooling) for the subscription named in the spec:
 - Confirm whether a resource group `${organization}-${project}` already exists; document drift in location or tags. The Terraform configuration must (re)create or align this group using the AVM resource-group module.
