@@ -43,7 +43,7 @@ This repository provisions secure-by-default Azure landing zones using specifica
 ### Terraform Registry search tips
 - Start from the AVM Terraform page for  resources: https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/ Find the respective link to terraform registry based on the Display Name and the resource type you want to deploy
 - Open the respective link to terraform registry based on the Display Name and the resource type you want to deploy.Use the `latest` tab (for example `https://registry.terraform.io/modules/Azure/avm-res-storage-storageaccount/azurerm/latest`)
-- Get the latest version number.
+- Get the latest version number to use from the "Provision Instructions" section of the page.
 - View usage and examples
 - Always use the latest version for each module you reference.
 
