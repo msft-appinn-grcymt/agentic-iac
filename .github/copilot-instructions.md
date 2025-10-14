@@ -41,15 +41,16 @@ This repository provisions secure-by-default Azure landing zones using specifica
 ## AVM module discovery & references
 
 ### Terraform Registry search tips
-- Search for `avm` plus the Azure resource name (e.g., `avm storage account`).
-- Filter results by the **Partner** tag to isolate the officially verified AVM modules.
-- When you open a module, use the `latest` tab (for example `https://registry.terraform.io/modules/Azure/avm-res-storage-storageaccount/azurerm/latest`) as a quick synopsis, then drill into documentation as needed.
+- Start from the AVM Terraform page for  resources: https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/ Find the respective link to terraform registry based on the Display Name and the resource type you want to deploy
+- Open the respective link to terraform registry based on the Display Name and the resource type you want to deploy.Use the `latest` tab (for example `https://registry.terraform.io/modules/Azure/avm-res-storage-storageaccount/azurerm/latest`)
+- Get the latest version number.
+- View usage and examples
+- Always use the latest version for each module you reference.
 
 ### Official AVM index catalogues
 - **Terraform resources**: `https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-resource-modules/`
 - **Terraform patterns**: `https://azure.github.io/Azure-Verified-Modules/indexes/terraform/tf-pattern-modules/`
-- **Bicep resources**: `https://azure.github.io/Azure-Verified-Modules/indexes/bicep/bicep-resource-modules/`
-- **Bicep patterns**: `https://azure.github.io/Azure-Verified-Modules/indexes/bicep/bicep-pattern-modules/`
+
 
 ### Bootstrapping Terraform usage from examples
 1. Start with the example provided in the module documentation.
@@ -82,6 +83,7 @@ Before authoring Terraform code, query Azure (using MCP tooling) for the subscri
 - Create the workload resource group via the AVM resource-group module and reuse its outputs (e.g., `module.workload_rg.name`, `module.workload_rg.id`) when wiring downstream modules. Do not recompute or hardcode the name.
 - Instantiate all workload resources with AVM modules, passing the resource-group name/id through module inputs designed for scoping.
 - Centralize tagging in local maps to ensure consistency across modules.
+- Keep the code clean and simple; avoid unnecessary complexity or indirection.
 
 ### Required AVM Terraform modules
 Use the latest **stable** verified versions (semantic `aa.bb.cc`) listed in the Terraform AVM index. Always pin `version = "x.y.z"` in each module block. You must query the Terraform Registry endpoint (`https://registry.terraform.io/v1/modules/Azure/<module>/azurerm/versions`) immediately before coding and select the highest `version` value flagged as `"status": "available"`. If the published tag exposes only two segments (e.g., `0.12`), append `.0` unless the index states otherwise (→ `0.12.0`). Document in your summary which endpoint responses were used to justify the chosen versions.
