@@ -81,6 +81,7 @@ Before authoring Terraform code, query Azure (using MCP tooling) for the subscri
 
 ### Scope & composition
 - Declare providers and backend settings in `providers.tf`; avoid redefining them inside module blocks.
+- Configure the Terraform backend for local state storage (e.g., the `local` backend); the GitHub Action that provisions environments should run end-to-end without requiring persistent state.
 - Accept only the parameters necessary to describe the deployment. Prefer local values and default variable assignments over exposing organization/project identifiers as input variables.
 - Create the workload resource group via the AVM resource-group module and reuse its outputs (e.g., `module.workload_rg.name`, `module.workload_rg.id`) when wiring downstream modules. Do not recompute or hardcode the name.
 - Instantiate all workload resources with AVM modules, passing the resource-group name/id through module inputs designed for scoping.
@@ -236,6 +237,7 @@ output "nsg_subnets" {
 Document any assumptions (e.g., defaulting to `ZRS` redundancy) directly in your summary when spec data is missing.
 
 ## Deployment workflow (manual & CI)
+- Environments created via the GitHub Action do not require persistent Terraform state; keep state files local during authoring and validation runs, and avoid configuring remote backends unless a future process explicitly demands it.
 - Author Terraform under `apps/{organization}/{project}` using a single state per workload.
 - Run deployment helper scripts (e.g., `deployTerraform.ps1 -Organization MIN800 -Project RG805`) once updated to Terraform. Maintain backwards-compatible flags until orchestration is refactored.
 - Configure CI workflows (`deploy.yaml`) to execute Terraform init/plan/apply with explicit `organization` and `project` inputs.
