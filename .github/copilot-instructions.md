@@ -24,6 +24,8 @@ This repository provisions secure-by-default Azure landing zones using specifica
 └── (no local module library)   # All components sourced from Azure Verified Modules for Terraform
 ```
 
+The `examples/` directory mirrors AVM module names (`/examples/{module}/main.tf`) to give quick, working references for configuring each module and understanding dependencies between components. Treat these samples as guidance only—adhere to the guardrails below for module versions, networking, and security when implementing workload code, and avoid copying the examples verbatim into production configurations.
+
 > ℹ️ **Canonical vocabulary**
 > - **organization** identifies the top-level requestor folder under `apps/` and `specs/`.
 > - **project** identifies the workload folder nested beneath the organization.
