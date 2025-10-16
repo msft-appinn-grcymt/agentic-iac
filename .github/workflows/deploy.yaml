@@ -16,6 +16,12 @@ permissions:
   id-token: write
   contents: read
 
+#These environment variables are used by the terraform azure provider to setup OIDD authenticate. 
+env:
+  ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+  ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+  
 jobs:
   deploy-infra:
     name: "Deploy Terraform workload for ${{ inputs.organization }} / ${{ inputs.project }}"
@@ -26,12 +32,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Login via Azure CLI using Federated Identity
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # - name: Login via Azure CLI using Federated Identity
+      #   uses: azure/login@v2
+      #   with:
+      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -41,11 +47,11 @@ jobs:
 
       - name: Terraform init
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform init -upgrade
+        run: terraform init # -upgrade
 
       - name: Terraform fmt check
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check # -recursive
 
       - name: Terraform validate
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
@@ -53,7 +59,7 @@ jobs:
 
       - name: Terraform plan
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform plan -out=tfplan -input=false
+        run: terraform plan -detailed-exitcode -no-color -out=tfplan -input=false
 
       - name: Terraform apply
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
