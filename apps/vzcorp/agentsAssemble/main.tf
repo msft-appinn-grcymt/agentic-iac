@@ -14,7 +14,7 @@ locals {
   vnet_address_space = ["192.168.0.0/24"]
   subnet_private_endpoints = {
     name             = "snet-private-endpoints"
-    address_prefixes = ["192.168.0.0/24"]
+    address_prefixes = ["192.168.0.0/26"]
   }
 }
 
