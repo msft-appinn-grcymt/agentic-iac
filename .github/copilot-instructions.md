@@ -55,7 +55,7 @@ This repository provisions secure-by-default Azure landing zones using specifica
 ### Bootstrapping Terraform usage from examples
 1. Start with the example provided in the module documentation.
 2. Replace any relative `source = "../../"` style paths with the registry reference `source = "Azure/avm-res-{service}-{resource}/azurerm"` (or the appropriate pattern module path).
-3. Add an explicit `version = "x.y.z"`, where `x.y.z` is the latest **available** release retrieved from `https://registry.terraform.io/v1/modules/Azure/<module>/azurerm/versions`.
+3. Add an explicit `version = "x.y.z"`, where `x.y.z` is the latest **available** release retrieved from `https://registry.terraform.io/v1/modules/Azure/<module>/azurerm/versions`. In the JSON response all the module versions are returned as an array ("versions"), you need to retrieve the version from the last item in the array as this depicts the latest version.
 4. Set `enable_telemetry = true` so usage metrics continue to inform AVM improvements.
 
 ### Module source references
