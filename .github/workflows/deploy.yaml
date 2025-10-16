@@ -63,7 +63,7 @@ jobs:
 
       - name: Terraform plan
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform plan -detailed-exitcode -no-color -out=tfplan -input=false
+        run: terraform plan -no-color -out=tfplan -input=false
 
       - name: Terraform apply
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}

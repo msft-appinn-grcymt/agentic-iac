@@ -81,6 +81,7 @@ Before authoring Terraform code, query Azure (using MCP tooling) for the subscri
 
 ### Scope & composition
 - Declare providers and backend settings in `providers.tf`; avoid redefining them inside module blocks.
+- Configure the `azurerm` provider with the minimal, vanilla setup: include only the empty `features {}` block without any additional feature flags or customizations.
 - Configure the Terraform backend for local state storage (e.g., the `local` backend); the GitHub Action that provisions environments should run end-to-end without requiring persistent state.
 - Accept only the parameters necessary to describe the deployment. Prefer local values and default variable assignments over exposing organization/project identifiers as input variables.
 - Create the workload resource group via the AVM resource-group module and reuse its outputs (e.g., `module.workload_rg.name`, `module.workload_rg.id`) when wiring downstream modules. Do not recompute or hardcode the name.
@@ -113,7 +114,7 @@ Use the latest **stable** verified versions (semantic `aa.bb.cc`) listed in the 
 ### Example Terraform skeleton (trim to fit workload)
 ```hcl
 terraform {
-  required_version = ">= 1.7.0"
+  required_version = ">= 1.9.5"
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
