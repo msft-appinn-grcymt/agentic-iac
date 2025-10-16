@@ -103,7 +103,7 @@ module "storage_account" {
 
   resource_group_name = module.workload_rg.name
   location            = local.location
-  name                = "st${local.organization}${local.project}${random_string.storage_suffix.result}"
+  name                = "${substr(lower("st${local.organization}${local.project}"), 0, 18)}${random_string.storage_suffix.result}"
 
   account_kind             = "StorageV2"
   account_tier             = "Standard"
