@@ -1,4 +1,4 @@
-name: Deploy Terraform Infrastructure
+name: Deploy Azure Infrastructure
 
 on:
   workflow_dispatch:
@@ -16,22 +16,10 @@ permissions:
   id-token: write
   contents: read
 
-#These environment variables are used by the terraform azure provider to setup OIDD authenticate. 
-env:
-  ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
-  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-  ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
-  
 jobs:
   deploy-infra:
-    name: "Deploy Terraform workload for ${{ inputs.organization }} / ${{ inputs.project }}"
+    name: "Deploy workload for ${{ inputs.organization }} / ${{ inputs.project }}"
     runs-on: ubuntu-latest
-    env:
-      TF_IN_AUTOMATION: true
-      ARM_SKIP_PROVIDER_REGISTRATION: true
-      ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
-      ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-      ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,28 +31,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.5
-          terraform_wrapper: false
-
-      - name: Terraform init
+      - name: Make deployment script executable
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform init # -upgrade
+        run: chmod +x deployment.sh
 
-      - name: Terraform fmt check
+      - name: Execute deployment script
         working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform fmt -check # -recursive
-
-      - name: Terraform validate
-        working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform validate
-
-      - name: Terraform plan
-        working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform plan -no-color -out=tfplan -input=false
-
-      - name: Terraform apply
-        working-directory: apps/${{ inputs.organization }}/${{ inputs.project }}
-        run: terraform apply -input=false -auto-approve tfplan
+        run: ./deployment.sh
