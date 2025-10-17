@@ -123,7 +123,8 @@ az network private-endpoint dns-zone-group create \
   --endpoint-name "${STORAGE_NAME}-pe" \
   --private-dns-zone "${PRIVATE_DNS_ZONE_ID}" \
   --zone-name "blob" \
-  --only-show-errors
+  --only-show-errors \
+  --name "default"
 
 echo "========================================"
 echo "Deployment complete!"
