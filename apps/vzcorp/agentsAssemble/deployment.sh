@@ -117,11 +117,11 @@ az network private-endpoint create \
   --only-show-errors
 
 echo "Creating private DNS zone group for Storage private endpoint..."
+PRIVATE_DNS_ZONE_ID=$(az network private-dns zone show --resource-group "${RESOURCE_GROUP}" --name "privatelink.blob.core.windows.net" --query id --output tsv)
 az network private-endpoint dns-zone-group create \
   --resource-group "${RESOURCE_GROUP}" \
   --endpoint-name "${STORAGE_NAME}-pe" \
-  --name "default" \
-  --private-dns-zone "privatelink.blob.core.windows.net" \
+  --private-dns-zone "${PRIVATE_DNS_ZONE_ID}" \
   --zone-name "blob" \
   --only-show-errors
 
