@@ -156,8 +156,8 @@ Full CIDR,Used CIDRs
 
 ## Reading the specification Excel
 1. **Sheet 1 – Components** lists resource types, SKUs, instance counts, and optional integrators (e.g., "App Service Plan P1v3 x2"). Group rows by shared characteristics when mapping to CLI commands.
-2. **Sheet 2 – Networking** provides request number, region, virtual network address space, per-subnet CIDR blocks, DNS requirements, and integration notes.
-3. Cross-check both sheets for consistency (e.g., a Storage account on Sheet 1 must map to a subnet tagged `Storage` on Sheet 2). Raise discrepancies immediately.
+2. **Metadata fields** – Extract the request number, organization, project name, region, and environment from the specification to populate script variables and resource tags.
+3. **Network allocation** – All virtual network CIDR ranges and subnet allocations MUST be determined from the available ranges in `network/networkRanges.csv`, following the VNET Address Range Management process defined above. Never use arbitrary or hardcoded CIDR ranges.
 
 ## Authoring `apps/{organization}/{project}/deployment.sh`
 
@@ -350,18 +350,19 @@ az network private-endpoint create \
 echo "Deployment complete!"
 ```
 
-## Translating Excel to Azure CLI commands
+## Translating specification to Azure CLI commands
 
-| Excel cue | CLI mapping |
+| Specification element | CLI mapping |
 | --- | --- |
-| `Request Number` (Sheet 2) | Populate `APP_NUMBER` variable and include in `--tags`. |
+| `Request Number` | Populate `APP_NUMBER` variable and include in `--tags`. |
 | `Organization` / `Project` | Used to construct `RESOURCE_GROUP` variable and tags. |
-| Subnet table (Sheet 2) | Generate `az network vnet subnet create` commands with appropriate CIDR ranges and NSG associations. |
+| `Region` / `Location` | Map to `--location` parameter for all resource creation commands. |
 | Component rows (Sheet 1) | Create corresponding `az` commands capturing SKU, tier, and distinguishing attributes. |
+| Network requirements | Allocate CIDR ranges from `network/networkRanges.csv` following the VNET Address Range Management process; generate `az network vnet subnet create` commands with calculated CIDR ranges and NSG associations. |
 | DNS requirements | Generate private DNS zone creation and virtual-network link commands. |
 | SLA or redundancy requirements | Map to service-specific flags (`--sku`, `--zone-redundant`, `--replication-type`). |
 
-Document any assumptions (e.g., defaulting to `ZRS` redundancy) directly in your summary when spec data is missing.
+Document any assumptions (e.g., defaulting to `ZRS` redundancy, selected CIDR allocation from networkRanges.csv) directly in your summary when spec data is missing.
 
 ## Deployment workflow
 - Author deployment scripts under `apps/{organization}/{project}/deployment.sh`
