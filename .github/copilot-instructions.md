@@ -289,7 +289,7 @@ Unless explicitly specified in the GitHub Issue or specification, App Service in
 If a specific runtime is mentioned in the Issue (e.g., "Node.js 18", "Python 3.11", ".NET 8"), use the `--runtime` parameter instead of `--deployment-container-image-name`.
 
 #### VNet integration
-When configuring VNet integration for App Service, ALWAYS use the **full subnet resource ID**, not the subnet name. Retrieve the subnet ID using `az network vnet subnet show --query id --output tsv` and pass it to the `--subnet` parameter.
+When configuring VNet integration for App Service, ALWAYS use the  **az webapp vnet-integration add** command.Provide the `--vnet` and `--subnet` parameters with the respective **names** of the vnet and subnet, not the full resource ids
 
 ## Deployment workflow
 - Author deployment scripts under `apps/{organization}/{project}/deployment.sh`
