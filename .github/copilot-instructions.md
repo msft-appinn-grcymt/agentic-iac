@@ -57,6 +57,103 @@ Before authoring the deployment script, query Azure (using MCP tooling) for the 
 - Enumerate existing VNets, subnets, private endpoints, and DNS zones to avoid naming or CIDR collisions.
 - Surface conflicts or prerequisites in your summary; never overwrite assets unless the spec explicitly permits changes.
 
+## VNET Address Range Management
+
+### Overview
+The `network/networkRanges.csv` file tracks available and allocated IP address ranges (CIDRs) across all deployments. This file is critical for preventing IP address conflicts and ensuring proper network planning.
+
+### File Structure
+The CSV file contains two columns:
+- **Full CIDR**: The complete available address space (currently one range, but more may be added in the future)
+- **Used CIDRs**: Individual CIDR blocks already allocated to existing deployments (one per row)
+
+### CIDR Allocation Process
+
+#### 1. Calculate Required IP Addresses
+Before selecting a CIDR range, calculate the total IP addresses needed based on:
+- Number of resources requiring IP addresses (VMs, App Service integrations, private endpoints, etc.)
+- Number of subnets required
+- Reserved Azure addresses per subnet (5 IPs: network address, default gateway, Azure DNS, and broadcast)
+
+#### 2. Apply 50% Buffer Rule
+**ALWAYS add 50% more capacity** to accommodate future scaling and growth.
+
+**Example calculation:**
+- If you need 4 VMs → requires 4 IPs
+- Add 50% buffer → 4 + (4 × 0.5) = 6 IPs minimum
+- Account for Azure reserved IPs → 6 + 5 = 11 IPs total
+- Required subnet size → /28 (16 IPs) or larger
+
+#### 3. Subnet Delegation Requirements
+When network delegation is required for specific Azure services (e.g., Azure Container Instances, App Service, Azure SQL Managed Instance):
+- **Minimum subnet size is /28** (16 IP addresses)
+- **ALWAYS consult the official Microsoft documentation** for the specific service to determine:
+  - Minimum acceptable subnet size
+  - Maximum subnet size
+  - Additional subnet requirements or restrictions
+  - Service-specific delegation configuration
+
+**Documentation lookup pattern:**
+- Search for: "Azure [service-name] subnet requirements"
+- Example: https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration#subnet-requirements
+
+#### 4. Select Non-Overlapping CIDR
+1. Read the `network/networkRanges.csv` file
+2. Review the "Full CIDR" column to understand available address space
+3. Review all entries in the "Used CIDRs" column to avoid conflicts
+4. Select a CIDR block that:
+   - Does NOT overlap with any used CIDR
+   - Is large enough for your calculated requirements (including 50% buffer)
+   - Allows for subnet segmentation if multiple subnets are needed
+
+#### 5. Update networkRanges.csv
+After selecting your CIDR range, you MUST update the file:
+- Add a new row in the "Used CIDRs" column with the allocated CIDR
+- Include this update as part of your deployment commit
+- Document the CIDR allocation in your deployment summary
+
+### Common Subnet Sizes Reference
+
+| Subnet Mask | CIDR | Total IPs | Usable IPs (minus 5 Azure reserved) | Typical Use Case |
+|-------------|------|-----------|-------------------------------------|------------------|
+| /28 | x.x.x.x/28 | 16 | 11 | Small delegated subnet, few resources |
+| /27 | x.x.x.x/27 | 32 | 27 | Medium subnet with delegation |
+| /26 | x.x.x.x/26 | 64 | 59 | Larger workloads |
+| /25 | x.x.x.x/25 | 128 | 123 | Multiple services or VMs |
+| /24 | x.x.x.x/24 | 256 | 251 | Standard subnet for most workloads |
+| /23 | x.x.x.x/23 | 512 | 507 | Large subnet for scaling |
+| /22 | x.x.x.x/22 | 1024 | 1019 | Very large workloads |
+
+### CIDR Allocation Example
+
+**Scenario:** Deploying 3 web apps with VNet integration and 2 private endpoints
+
+**Calculation:**
+1. Web apps with VNet integration: 3 IPs
+2. Private endpoints: 2 IPs
+3. Total required: 5 IPs
+4. Add 50% buffer: 5 + (5 × 0.5) = 7.5 → round up to 8 IPs
+5. Azure reserved: 8 + 5 = 13 IPs
+6. Minimum subnet: /28 (16 IPs)
+7. Since App Service VNet integration requires delegation, verify minimum size in docs
+8. Selected CIDR: 192.168.1.0/28 (assuming 192.168.0.0/24 is already used)
+
+**Update to networkRanges.csv:**
+```csv
+Full CIDR,Used CIDRs
+192.168.0.0/16,192.168.0.0/24
+192.168.0.0/16,192.168.1.0/28
+```
+
+### Validation Checklist
+- [ ] Calculated total IP requirements including all resources
+- [ ] Applied 50% buffer for scaling
+- [ ] Checked subnet delegation requirements in official Microsoft docs
+- [ ] Verified no overlap with existing CIDRs in networkRanges.csv
+- [ ] Selected appropriate subnet size (minimum /28 for delegated subnets)
+- [ ] Updated networkRanges.csv with the new allocation
+- [ ] Documented CIDR allocation in deployment summary
+
 ## Reading the specification Excel
 1. **Sheet 1 – Components** lists resource types, SKUs, instance counts, and optional integrators (e.g., "App Service Plan P1v3 x2"). Group rows by shared characteristics when mapping to CLI commands.
 2. **Sheet 2 – Networking** provides request number, region, virtual network address space, per-subnet CIDR blocks, DNS requirements, and integration notes.
