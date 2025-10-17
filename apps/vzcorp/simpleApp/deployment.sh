@@ -196,11 +196,6 @@ az webapp vnet-integration add \
   --only-show-errors
 
 echo "Disabling public network access for App Service..."
-az webapp config access-restriction set \
-  --name "${APP_NAME}" \
-  --resource-group "${RESOURCE_GROUP}" \
-  --use-same-restrictions-for-scm-site true \
-  --only-show-errors
 
 az webapp update \
   --name "${APP_NAME}" \
