@@ -182,93 +182,6 @@ Commands must follow this general sequence to respect Azure resource dependencie
 8. **Application Services** – App Service Plans, Web Apps with VNet integration
 9. **Monitoring** – Log Analytics, Application Insights
 
-### Common resource patterns
-
-#### Resource group creation
-```bash
-az group create \
-  --name "${RESOURCE_GROUP}" \
-  --location "${LOCATION}" \
-  --tags applicationNumber="${APP_NUMBER}" organization="${ORG}" project="${PROJECT}" environment="${ENV}"
-```
-
-#### Network Security Group
-```bash
-az network nsg create \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "${NSG_NAME}" \
-  --location "${LOCATION}" \
-  --tags applicationNumber="${APP_NUMBER}"
-```
-
-#### Virtual Network with subnets
-```bash
-az network vnet create \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "${VNET_NAME}" \
-  --location "${LOCATION}" \
-  --address-prefixes "10.0.0.0/16" \
-  --subnet-name "default-subnet" \
-  --subnet-prefixes "10.0.1.0/24" \
-  --tags applicationNumber="${APP_NUMBER}"
-```
-
-#### Private DNS Zone
-```bash
-az network private-dns zone create \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "privatelink.vaultcore.azure.net" \
-  --tags applicationNumber="${APP_NUMBER}"
-```
-
-#### Storage Account (private access)
-```bash
-az storage account create \
-  --name "${STORAGE_NAME}" \
-  --resource-group "${RESOURCE_GROUP}" \
-  --location "${LOCATION}" \
-  --sku Standard_ZRS \
-  --kind StorageV2 \
-  --public-network-access Disabled \
-  --tags applicationNumber="${APP_NUMBER}"
-```
-
-#### Private Endpoint
-```bash
-az network private-endpoint create \
-  --name "${PE_NAME}" \
-  --resource-group "${RESOURCE_GROUP}" \
-  --location "${LOCATION}" \
-  --subnet "${SUBNET_ID}" \
-  --private-connection-resource-id "${RESOURCE_ID}" \
-  --group-id "vault" \
-  --connection-name "${CONNECTION_NAME}" \
-  --tags applicationNumber="${APP_NUMBER}"
-```
-
-### Required resource types and key arguments
-
-| Resource Type | CLI Command Base | Essential Arguments | Private Networking Flags |
-| --- | --- | --- | --- |
-| Resource Group | `az group create` | `--name`, `--location`, `--tags` | N/A |
-| Virtual Network | `az network vnet create` | `--resource-group`, `--name`, `--address-prefixes` | N/A |
-| Subnet | `az network vnet subnet create` | `--resource-group`, `--vnet-name`, `--name`, `--address-prefixes` | `--network-security-group`, `--service-endpoints` |
-| NSG | `az network nsg create` | `--resource-group`, `--name`, `--location` | N/A |
-| NSG Rule | `az network nsg rule create` | `--resource-group`, `--nsg-name`, `--name`, `--priority`, `--direction`, `--access` | N/A |
-| Private DNS Zone | `az network private-dns zone create` | `--resource-group`, `--name` | N/A |
-| DNS VNet Link | `az network private-dns link vnet create` | `--resource-group`, `--zone-name`, `--name`, `--virtual-network` | N/A |
-| Storage Account | `az storage account create` | `--name`, `--resource-group`, `--sku`, `--kind` | `--public-network-access Disabled` |
-| Key Vault | `az keyvault create` | `--name`, `--resource-group`, `--location` | `--public-network-access Disabled` |
-| SQL Server | `az sql server create` | `--name`, `--resource-group`, `--admin-user`, `--admin-password` | `--enable-public-network false` |
-| SQL Database | `az sql db create` | `--resource-group`, `--server`, `--name`, `--service-objective` | N/A |
-| App Service Plan | `az appservice plan create` | `--name`, `--resource-group`, `--sku` | N/A |
-| Web App | `az webapp create` | `--name`, `--resource-group`, `--plan` | `--vnet-integration`, `--https-only` |
-| Private Endpoint | `az network private-endpoint create` | `--name`, `--resource-group`, `--subnet`, `--private-connection-resource-id`, `--group-id` | Always used for private access |
-| Log Analytics | `az monitor log-analytics workspace create` | `--resource-group`, `--workspace-name`, `--location` | N/A |
-| App Insights | `az monitor app-insights component create` | `--app`, `--location`, `--resource-group`, `--workspace` | N/A |
-
-> ⚠️ **Always consult the official Azure CLI documentation** at https://learn.microsoft.com/en-us/cli/azure/{service} for complete parameter schemas, optional flags, and latest syntax.
-
 ### Example deployment.sh skeleton
 ```bash
 #!/bin/bash
@@ -363,6 +276,20 @@ echo "Deployment complete!"
 | SLA or redundancy requirements | Map to service-specific flags (`--sku`, `--zone-redundant`, `--replication-type`). |
 
 Document any assumptions (e.g., defaulting to `ZRS` redundancy, selected CIDR allocation from networkRanges.csv) directly in your summary when spec data is missing.
+
+## Service-specific instructions
+
+### App Service (Web Apps)
+
+#### Default runtime configuration
+Unless explicitly specified in the GitHub Issue or specification, App Service instances MUST use the default Docker container runtime:
+- **Container image**: `mcr.microsoft.com/appsvc/staticsite:latest`
+- **Deployment method**: Docker container from Microsoft Container Registry
+
+If a specific runtime is mentioned in the Issue (e.g., "Node.js 18", "Python 3.11", ".NET 8"), use the `--runtime` parameter instead of `--deployment-container-image-name`.
+
+#### VNet integration
+When configuring VNet integration for App Service, ALWAYS use the **full subnet resource ID**, not the subnet name. Retrieve the subnet ID using `az network vnet subnet show --query id --output tsv` and pass it to the `--subnet` parameter.
 
 ## Deployment workflow
 - Author deployment scripts under `apps/{organization}/{project}/deployment.sh`
