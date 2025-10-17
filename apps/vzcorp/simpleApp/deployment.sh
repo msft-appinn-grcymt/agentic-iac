@@ -180,15 +180,7 @@ az webapp create \
   --plan "${APP_SERVICE_PLAN_NAME}" \
   --deployment-container-image-name "mcr.microsoft.com/appsvc/staticsite:latest" \
   --tags ${TAGS} \
-  --only-show-errors
-
-echo "Configuring Web App to disable public access..."
-az webapp config access-restriction add \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "${WEB_APP_NAME}" \
-  --rule-name "DenyAll" \
-  --action Deny \
-  --priority 100 \
+  --public-network-access Disabled \
   --only-show-errors
 
 echo "Integrating Web App with VNet..."
