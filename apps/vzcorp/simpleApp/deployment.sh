@@ -192,7 +192,6 @@ APPSERVICE_SUBNET_ID=$(az network vnet subnet show \
 az webapp vnet-integration add \
   --name "${APP_NAME}" \
   --resource-group "${RESOURCE_GROUP}" \
-  --vnet "${RESOURCE_GROUP}-vnet" \
   --subnet "${APPSERVICE_SUBNET_ID}" \
   --only-show-errors
 
