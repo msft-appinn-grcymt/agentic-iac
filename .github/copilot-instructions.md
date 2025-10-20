@@ -271,7 +271,7 @@ echo "Deployment complete!"
 | `Organization` / `Project` | Used to construct `RESOURCE_GROUP` variable and tags. |
 | `Region` / `Location` | Map to `--location` parameter for all resource creation commands. |
 | Component rows (Sheet 1) | Create corresponding `az` commands capturing SKU, tier, and distinguishing attributes. |
-| Network requirements | Allocate CIDR ranges from `network/networkRanges.csv` following the VNET Address Range Management process; generate `az network vnet subnet create` commands with calculated CIDR ranges and NSG associations. |
+| Network requirements | Allocate CIDR ranges from `network/networkRanges.csv` following the VNET Address Range Management process. **Before allocating new ranges, analyze existing allocations for gaps that can accommodate the required subnet size.** For example, if `10.0.0.0/28` and `10.0.1.0/24` are allocated and a `/28` subnet is needed, use `10.0.0.16/28` (the gap between the first allocation and the next network boundary) instead of allocating from unused address space. Only allocate from completely unused ranges when no suitable gaps exist. Generate `az network vnet subnet create` commands with the selected CIDR ranges and NSG associations. |
 | DNS requirements | Generate private DNS zone creation and virtual-network link commands. |
 | SLA or redundancy requirements | Map to service-specific flags (`--sku`, `--zone-redundant`, `--replication-type`). |
 
