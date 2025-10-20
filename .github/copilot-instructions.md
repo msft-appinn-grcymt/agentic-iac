@@ -51,6 +51,46 @@ Before generating any Azure CLI command, you MUST consult the official Microsoft
 4. Understand the dependency requirements (e.g., resource group must exist before creating resources)
 5. Apply private networking configurations where applicable
 
+## Azure resource naming conventions
+
+### Naming validation requirements
+Before creating any Azure resource, you MUST verify the naming restrictions for that specific resource type. Azure services have varying requirements for resource names including:
+
+- **Character restrictions** – Some services only allow lowercase letters (e.g., Storage Accounts, Cosmos DB), others allow mixed case, hyphens, or underscores
+- **Length limits** – Each resource type has minimum and maximum name length requirements (e.g., Storage Accounts: 3-24 characters, Key Vault: 3-24 characters)
+- **Allowed characters** – Different services permit different character sets (alphanumeric only, alphanumeric with hyphens, etc.)
+- **Global uniqueness** – Some resources require globally unique names (e.g., Storage Accounts, App Services)
+
+### Documentation lookup for naming rules
+Always consult the official Microsoft documentation for naming rules:
+- **Naming rules reference**: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules
+- Search for: "Azure [service-name] naming restrictions" or "[service-name] name requirements"
+
+### Project name sanitization
+When constructing resource names from organization and project variables:
+
+1. **Remove underscores** – If the project name contains underscores (e.g., `myapp_4`), remove them before using in resource names (e.g., `myapp4`)
+2. **Apply case transformations** – Convert to lowercase for services that require it (e.g., Storage Accounts, Cosmos DB)
+3. **Validate length** – Ensure the final resource name meets length requirements; truncate or abbreviate if necessary
+4. **Remove invalid characters** – Strip any characters not allowed by the target service
+
+**Example transformations:**
+```bash
+# Original project name with underscore
+PROJECT="myapp_4"
+
+# Remove underscores for resource naming
+PROJECT_CLEAN="${PROJECT//_/}"  # Results in "myapp4"
+
+# For services requiring lowercase (e.g., Cosmos DB, Storage)
+COSMOS_ACCOUNT_NAME="${ORG,,}-${PROJECT_CLEAN,,}-cosmos"
+STORAGE_ACCOUNT_NAME="${ORG,,}${PROJECT_CLEAN,,}storage"  # No hyphens for storage accounts
+
+# For services allowing hyphens (e.g., Key Vault, App Service)
+KEYVAULT_NAME="${ORG}-${PROJECT_CLEAN}-kv"
+WEBAPP_NAME="${ORG}-${PROJECT_CLEAN}-app"
+```
+
 ## Resource discovery checklist
 Before authoring the deployment script, query Azure (using MCP tooling) for the subscription named in the spec:
 - Confirm whether a resource group `${organization}-${project}` already exists; document drift in location or tags.
@@ -190,6 +230,10 @@ set -e
 # Variables derived from Excel specification
 ORG="<organization>"
 PROJECT="<project>"
+
+# Sanitize project name (remove underscores, apply transformations)
+PROJECT_CLEAN="${PROJECT//_/}"  # Remove underscores (e.g., myapp_4 -> myapp4)
+
 RESOURCE_GROUP="${ORG}-${PROJECT}"
 LOCATION="westeurope"
 APP_NUMBER="<request number>"
@@ -239,7 +283,7 @@ az network private-dns link vnet create \
 
 echo "Creating Key Vault..."
 az keyvault create \
-  --name "${RESOURCE_GROUP}-kv" \
+  --name "${ORG}-${PROJECT_CLEAN}-kv" \
   --resource-group "${RESOURCE_GROUP}" \
   --location "${LOCATION}" \
   --public-network-access Disabled \
@@ -247,7 +291,7 @@ az keyvault create \
 
 echo "Creating private endpoint for Key Vault..."
 SUBNET_ID=$(az network vnet subnet show --resource-group "${RESOURCE_GROUP}" --vnet-name "${RESOURCE_GROUP}-vnet" --name "default-subnet" --query id -o tsv)
-KV_ID=$(az keyvault show --name "${RESOURCE_GROUP}-kv" --query id -o tsv)
+KV_ID=$(az keyvault show --name "${ORG}-${PROJECT_CLEAN}-kv" --query id -o tsv)
 az network private-endpoint create \
   --name "${RESOURCE_GROUP}-kv-pe" \
   --resource-group "${RESOURCE_GROUP}" \
@@ -299,7 +343,7 @@ Cosmos DB account names MUST be lowercase. Azure enforces this requirement - acc
 **Example:**
 ```bash
 # Correct approach
-COSMOS_ACCOUNT_NAME="${ORG,,}-${PROJECT,,}-cosmos"
+COSMOS_ACCOUNT_NAME="${ORG,,}-${PROJECT_CLEAN,,}-cosmos"
 
 # This ensures "VZCorp-MyProject" becomes "vzcorp-myproject-cosmos"
 az cosmosdb create \
