@@ -5,7 +5,7 @@ set -e
 ORG="vzcorp"
 PROJECT="kvApp"
 RESOURCE_GROUP="${ORG}-${PROJECT}"
-LOCATION="westeurope"
+LOCATION="germanywestcentral"
 APP_NUMBER="kvApp"
 ENV="Prod"
 
