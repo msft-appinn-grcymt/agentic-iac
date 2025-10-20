@@ -291,6 +291,25 @@ If a specific runtime is mentioned in the Issue (e.g., "Node.js 18", "Python 3.1
 #### VNet integration
 When configuring VNet integration for App Service, ALWAYS use the  **az webapp vnet-integration add** command.Provide the `--vnet` and `--subnet` parameters with the respective **names** of the vnet and subnet, not the full resource ids. Public access should be set to `Disabled`, no firewall rules to be allowed and ensure private endpoint creation for secure access.
 
+### Cosmos DB
+
+#### Naming requirements
+Cosmos DB account names MUST be lowercase. Azure enforces this requirement - account names can only contain lowercase letters, numbers, and hyphens. When generating Cosmos DB account names from organization and project variables, always convert to lowercase using `${VARIABLE,,}` in bash or equivalent transformation.
+
+**Example:**
+```bash
+# Correct approach
+COSMOS_ACCOUNT_NAME="${ORG,,}-${PROJECT,,}-cosmos"
+
+# This ensures "VZCorp-MyProject" becomes "vzcorp-myproject-cosmos"
+az cosmosdb create \
+  --name "${COSMOS_ACCOUNT_NAME}" \
+  --resource-group "${RESOURCE_GROUP}" \
+  --locations regionName="${LOCATION}" failoverPriority=0 \
+  --public-network-access Disabled \
+  --tags ${TAGS}
+```
+
 ## Deployment workflow
 - Author deployment scripts under `apps/{organization}/{project}/deployment.sh`
 - Scripts should be executable and contain all necessary Azure CLI commands in dependency order
