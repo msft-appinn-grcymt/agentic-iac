@@ -162,7 +162,7 @@ az keyvault create \
   --only-show-errors
 
 echo "Creating Cosmos DB account..."
-COSMOS_ACCOUNT_NAME="${RESOURCE_GROUP}-cosmos"
+COSMOS_ACCOUNT_NAME="${ORG,,}-${PROJECT,,}-cosmos"
 
 az cosmosdb create \
   --name "${COSMOS_ACCOUNT_NAME}" \
