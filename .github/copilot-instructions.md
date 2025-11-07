@@ -34,22 +34,27 @@ This repository provisions secure-by-default Azure landing zones using specifica
 ## Azure CLI documentation consultation
 
 ### Command reference guidelines
-Before generating any Azure CLI command, you MUST consult the official Microsoft documentation to understand the requirements, options, and syntax:
+Before generating any Azure CLI command, you MUST use the Microsoft Learn MCP tools to consult the official documentation and understand the requirements, options, and syntax:
 
-- **Root documentation**: https://learn.microsoft.com/en-us/cli/azure/
-- **Service-specific pattern**: https://learn.microsoft.com/en-us/cli/azure/{service}
-  - Example for AKS: https://learn.microsoft.com/en-us/cli/azure/aks
-  - Example for storage: https://learn.microsoft.com/en-us/cli/azure/storage
-  - Example for network: https://learn.microsoft.com/en-us/cli/azure/network
-  - Example for keyvault: https://learn.microsoft.com/en-us/cli/azure/keyvault
-  - Example for sql: https://learn.microsoft.com/en-us/cli/azure/sql
+- Use `mcp_microsoft_doc_microsoft_docs_search` to search for Azure CLI documentation
+- Use `mcp_microsoft_doc_microsoft_code_sample_search` to find practical Azure CLI code examples
+- Use `mcp_microsoft_doc_microsoft_docs_fetch` to retrieve complete documentation pages when detailed information is needed
 
 ### Documentation lookup process
-1. Identify the Azure service you need to create (e.g., Key Vault, Storage Account, SQL Database)
-2. Navigate to the corresponding CLI documentation page using the pattern above
-3. Review the available commands, required parameters, and optional flags
-4. Understand the dependency requirements (e.g., resource group must exist before creating resources)
-5. Apply private networking configurations where applicable
+1. **Identify the Azure service** you need to create (e.g., Key Vault, Storage Account, SQL Database)
+2. **Search for CLI documentation** using `mcp_microsoft_doc_microsoft_docs_search` with queries like:
+   - "Azure CLI [service-name] commands" (e.g., "Azure CLI keyvault commands")
+   - "az [service-name] create syntax" (e.g., "az keyvault create syntax")
+   - "[service-name] CLI reference" (e.g., "storage CLI reference")
+3. **Find practical examples** using `mcp_microsoft_doc_microsoft_code_sample_search` with queries like:
+   - "az [service-name] create examples" (e.g., "az cosmosdb create examples")
+   - "Azure CLI [service-name] private endpoint" for private networking patterns
+4. **Fetch complete documentation** using `mcp_microsoft_doc_microsoft_docs_fetch` when you need:
+   - Full parameter lists and descriptions
+   - Complete command syntax reference
+   - Detailed configuration options
+5. **Understand dependency requirements** from the retrieved documentation (e.g., resource group must exist before creating resources)
+6. **Apply private networking configurations** based on the documented options and examples
 
 ## Azure resource naming conventions
 
@@ -62,9 +67,12 @@ Before creating any Azure resource, you MUST verify the naming restrictions for 
 - **Global uniqueness** – Some resources require globally unique names (e.g., Storage Accounts, App Services)
 
 ### Documentation lookup for naming rules
-Always consult the official Microsoft documentation for naming rules:
-- **Naming rules reference**: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules
-- Search for: "Azure [service-name] naming restrictions" or "[service-name] name requirements"
+Always use the Microsoft Learn MCP tools to consult the official documentation for naming rules:
+- Use `mcp_microsoft_doc_microsoft_docs_search` with queries like:
+  - "Azure resource naming rules and restrictions"
+  - "Azure [service-name] naming restrictions" (e.g., "Azure storage account naming restrictions")
+  - "[service-name] name requirements" (e.g., "Key Vault name requirements")
+- Use `mcp_microsoft_doc_microsoft_docs_fetch` to retrieve complete naming convention documentation when detailed validation rules are needed
 
 ### Project name sanitization
 When constructing resource names from organization and project variables:
@@ -134,8 +142,10 @@ When network delegation is required for specific Azure services (e.g., Azure Con
   - Service-specific delegation configuration
 
 **Documentation lookup pattern:**
-- Search for: "Azure [service-name] subnet requirements"
-- Example: https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration#subnet-requirements
+- Use `mcp_microsoft_doc_microsoft_docs_search` with queries like:
+  - "Azure [service-name] subnet requirements" (e.g., "Azure App Service subnet requirements")
+  - "[service-name] VNet integration subnet size" (e.g., "App Service VNet integration subnet size")
+  - "Azure [service-name] subnet delegation" for services requiring subnet delegation
 
 #### 4. Select Non-Overlapping CIDR
 1. Read the `network/networkRanges.csv` file
